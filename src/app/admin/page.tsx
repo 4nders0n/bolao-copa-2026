@@ -116,7 +116,7 @@ export default async function AdminPage() {
                     </span>
                   </div>
                   <span className="text-xs text-gray-400">
-                    {match.matchDate.toLocaleDateString("pt-BR")}
+                    {match.matchDate.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
                   </span>
                 </div>
               ))}

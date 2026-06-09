@@ -64,6 +64,7 @@ export function MatchResultForm({ match }: MatchResultFormProps) {
               month: "2-digit",
               hour: "2-digit",
               minute: "2-digit",
+              timeZone: "America/Sao_Paulo",
             })}
           </span>
           {isPast && match.status === "scheduled" && (

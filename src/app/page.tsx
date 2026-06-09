@@ -1,5 +1,6 @@
 import { getRanking } from "@/server/queries/ranking";
 import { AuthButton } from "@/components/AuthButton";
+import { CupInfo } from "@/components/CupInfo";
 import Link from "next/link";
 
 export default async function Home() {
@@ -22,6 +23,8 @@ export default async function Home() {
             <AuthButton />
           </div>
         </header>
+
+        <CupInfo />
 
         <section>
           <h2 className="mb-4 text-xl font-semibold text-gray-800">

@@ -102,6 +102,7 @@ export default async function JogosPage() {
                             month: "2-digit",
                             hour: "2-digit",
                             minute: "2-digit",
+                            timeZone: "America/Sao_Paulo",
                           })}
                         </span>
                         {match.group && (
