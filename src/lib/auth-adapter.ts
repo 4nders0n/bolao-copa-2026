@@ -1,14 +1,13 @@
 import { eq, and } from "drizzle-orm";
-import type { Adapter, AdapterAccount, AdapterUser, AdapterSession } from "next-auth/adapters";
+import type { Adapter, AdapterAccount, AdapterUser, AdapterSession, VerificationToken } from "next-auth/adapters";
 import { db } from "./db";
 import { users, accounts, sessions, verificationTokens } from "./schema";
 import { randomId } from "./utils";
 
 export function DrizzleSQLiteAdapter(): Adapter {
   return {
-    async createUser(data) {
+    async createUser(data: Omit<AdapterUser, "id">) {
       const id = randomId();
-      console.log("[AUTH ADAPTER] createUser:", data.email);
       await db.insert(users).values({
         id,
         email: data.email,
@@ -21,26 +20,25 @@ export function DrizzleSQLiteAdapter(): Adapter {
       const user = await db.query.users.findFirst({
         where: eq(users.id, id),
       });
-      console.log("[AUTH ADAPTER] createUser result:", user?.id);
 
       return user as AdapterUser;
     },
 
-    async getUser(id) {
+    async getUser(id: string) {
       const user = await db.query.users.findFirst({
         where: eq(users.id, id),
       });
       return (user as AdapterUser) ?? null;
     },
 
-    async getUserByEmail(email) {
+    async getUserByEmail(email: string) {
       const user = await db.query.users.findFirst({
         where: eq(users.email, email),
       });
       return (user as AdapterUser) ?? null;
     },
 
-    async getUserByAccount({ providerAccountId, provider }) {
+    async getUserByAccount({ providerAccountId, provider }: { providerAccountId: string; provider: string }) {
       const account = await db.query.accounts.findFirst({
         where: and(
           eq(accounts.providerAccountId, providerAccountId),
@@ -57,7 +55,7 @@ export function DrizzleSQLiteAdapter(): Adapter {
       return (user as AdapterUser) ?? null;
     },
 
-    async updateUser(data) {
+    async updateUser(data: Partial<AdapterUser> & Pick<AdapterUser, "id">) {
       if (!data.id) throw new Error("User id is required");
 
       await db
@@ -78,12 +76,11 @@ export function DrizzleSQLiteAdapter(): Adapter {
       return user as AdapterUser;
     },
 
-    async deleteUser(userId) {
+    async deleteUser(userId: string) {
       await db.delete(users).where(eq(users.id, userId));
     },
 
-    async linkAccount(data) {
-      console.log("[AUTH ADAPTER] linkAccount:", data.provider, data.userId);
+    async linkAccount(data: AdapterAccount) {
       await db.insert(accounts).values({
         id: randomId(),
         userId: data.userId,
@@ -96,14 +93,13 @@ export function DrizzleSQLiteAdapter(): Adapter {
         token_type: data.token_type ?? null,
         scope: data.scope ?? null,
         id_token: data.id_token ?? null,
-        session_state: data.session_state as string ?? null,
+        session_state: (data.session_state as string) ?? null,
       });
-      console.log("[AUTH ADAPTER] linkAccount done");
 
-      return data as AdapterAccount;
+      return data;
     },
 
-    async unlinkAccount({ providerAccountId, provider }) {
+    async unlinkAccount({ providerAccountId, provider }: { providerAccountId: string; provider: string }) {
       await db
         .delete(accounts)
         .where(
@@ -114,9 +110,8 @@ export function DrizzleSQLiteAdapter(): Adapter {
         );
     },
 
-    async createSession(data) {
+    async createSession(data: { sessionToken: string; userId: string; expires: Date }) {
       const id = randomId();
-      console.log("[AUTH ADAPTER] createSession for user:", data.userId);
       await db.insert(sessions).values({
         id,
         userId: data.userId,
@@ -127,12 +122,11 @@ export function DrizzleSQLiteAdapter(): Adapter {
       const session = await db.query.sessions.findFirst({
         where: eq(sessions.id, id),
       });
-      console.log("[AUTH ADAPTER] createSession result:", session?.id);
 
       return session as AdapterSession;
     },
 
-    async getSessionAndUser(sessionToken) {
+    async getSessionAndUser(sessionToken: string) {
       const session = await db.query.sessions.findFirst({
         where: eq(sessions.sessionToken, sessionToken),
       });
@@ -151,7 +145,7 @@ export function DrizzleSQLiteAdapter(): Adapter {
       };
     },
 
-    async updateSession(data) {
+    async updateSession(data: Partial<AdapterSession> & Pick<AdapterSession, "sessionToken">) {
       await db
         .update(sessions)
         .set({
@@ -166,13 +160,13 @@ export function DrizzleSQLiteAdapter(): Adapter {
       return session as AdapterSession;
     },
 
-    async deleteSession(sessionToken) {
+    async deleteSession(sessionToken: string) {
       await db
         .delete(sessions)
         .where(eq(sessions.sessionToken, sessionToken));
     },
 
-    async createVerificationToken(data) {
+    async createVerificationToken(data: VerificationToken) {
       await db.insert(verificationTokens).values({
         identifier: data.identifier,
         token: data.token,
@@ -182,7 +176,7 @@ export function DrizzleSQLiteAdapter(): Adapter {
       return data;
     },
 
-    async useVerificationToken({ identifier, token }) {
+    async useVerificationToken({ identifier, token }: { identifier: string; token: string }) {
       const vt = await db.query.verificationTokens.findFirst({
         where: and(
           eq(verificationTokens.identifier, identifier),
