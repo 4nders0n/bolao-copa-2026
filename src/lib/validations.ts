@@ -28,7 +28,7 @@ const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
 export const scoreSchema = z.number().int().min(0).max(99);
 
 export const predictionSchema = z.object({
-  matchId: z.string().cuid(),
+  matchId: z.string().min(1),
   homeScore: scoreSchema,
   awayScore: scoreSchema,
 });
@@ -36,7 +36,7 @@ export const predictionSchema = z.object({
 export type PredictionInput = z.infer<typeof predictionSchema>;
 
 export const matchResultSchema = z.object({
-  matchId: z.string().cuid(),
+  matchId: z.string().min(1),
   homeScore: scoreSchema,
   awayScore: scoreSchema,
 });
