@@ -41,9 +41,13 @@ export async function submitPrediction(
   const { matchId, homeScore, awayScore } = parsed.data;
 
   // Check match exists and deadline
-  const match = await db.query.matches.findFirst({
-    where: eq(matches.id, matchId),
-  });
+  const matchResults = await db
+    .select()
+    .from(matches)
+    .where(eq(matches.id, matchId))
+    .limit(1);
+
+  const match = matchResults[0];
 
   if (!match) {
     return { success: false, error: "Jogo não encontrado" };
@@ -57,12 +61,18 @@ export async function submitPrediction(
   }
 
   // Check if prediction already exists
-  const existing = await db.query.predictions.findFirst({
-    where: and(
-      eq(predictions.userId, session.user.id),
-      eq(predictions.matchId, matchId)
-    ),
-  });
+  const existingResults = await db
+    .select()
+    .from(predictions)
+    .where(
+      and(
+        eq(predictions.userId, session.user.id),
+        eq(predictions.matchId, matchId)
+      )
+    )
+    .limit(1);
+
+  const existing = existingResults[0];
 
   if (existing) {
     // Update existing prediction
