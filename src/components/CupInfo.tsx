@@ -2,7 +2,36 @@ export function CupInfo() {
   const startDate = new Date("2026-06-11T19:00:00Z");
   const now = new Date();
   const diff = startDate.getTime() - now.getTime();
-  const daysToStart = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  const hoursToStart = Math.ceil(diff / (1000 * 60 * 60));
+  const daysToStart = Math.ceil(diff / (1000 * 60 * 60 * 24));
+
+  let countdownContent;
+  if (diff <= 0) {
+    countdownContent = (
+      <div className="text-center rounded-lg bg-green-100 px-4 py-2 border border-green-200">
+        <div className="text-lg font-bold text-green-700">🔴 AO VIVO</div>
+        <div className="text-xs text-green-600">Copa em andamento!</div>
+      </div>
+    );
+  } else if (hoursToStart <= 24) {
+    countdownContent = (
+      <div className="text-center rounded-lg bg-yellow-50 px-4 py-2 shadow-sm border border-yellow-200">
+        <div className="text-2xl font-bold text-yellow-600">HOJE</div>
+        <div className="text-xs text-yellow-700">
+          Início às 16h (Brasília)
+        </div>
+      </div>
+    );
+  } else {
+    countdownContent = (
+      <div className="text-center rounded-lg bg-white px-4 py-2 shadow-sm border">
+        <div className="text-2xl font-bold text-blue-600">{daysToStart}</div>
+        <div className="text-xs text-gray-500">
+          {daysToStart === 1 ? "dia para o início" : "dias para o início"}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mb-8 rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 to-green-50 p-6">
@@ -16,19 +45,7 @@ export function CupInfo() {
           </p>
         </div>
 
-        {daysToStart > 0 ? (
-          <div className="text-center rounded-lg bg-white px-4 py-2 shadow-sm border">
-            <div className="text-2xl font-bold text-blue-600">{daysToStart}</div>
-            <div className="text-xs text-gray-500">
-              {daysToStart === 1 ? "dia para o início" : "dias para o início"}
-            </div>
-          </div>
-        ) : (
-          <div className="text-center rounded-lg bg-green-100 px-4 py-2 border border-green-200">
-            <div className="text-lg font-bold text-green-700">🔴 AO VIVO</div>
-            <div className="text-xs text-green-600">Copa em andamento!</div>
-          </div>
-        )}
+        {countdownContent}
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
