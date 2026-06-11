@@ -8,7 +8,7 @@ const CHANNELS: Record<string, BroadcastChannel> = {
   "CazéTV": {
     name: "CazéTV",
     icon: "▶️",
-    url: "https://www.youtube.com/@CazsTV/live",
+    url: "https://www.youtube.com/@CazeTV/live",
   },
   "Globo": {
     name: "Globo",
