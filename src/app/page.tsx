@@ -1,10 +1,32 @@
 import { getRanking } from "@/server/queries/ranking";
 import { AuthButton } from "@/components/AuthButton";
 import { CupInfo } from "@/components/CupInfo";
+import { TodayMatches } from "@/components/TodayMatches";
+import { db } from "@/lib/db";
+import { matches } from "@/lib/schema";
+import { gte, lte, and, asc } from "drizzle-orm";
 import Link from "next/link";
+
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const ranking = await getRanking();
+
+  // Get today's matches (UTC day boundaries adjusted for Brazil timezone)
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  // Adjust for BRT: start of day in Brazil = 03:00 UTC
+  const brStart = new Date(todayStart);
+  brStart.setUTCHours(3, 0, 0, 0);
+  const brEnd = new Date(brStart);
+  brEnd.setUTCDate(brEnd.getUTCDate() + 1);
+
+  const todayMatches = await db
+    .select()
+    .from(matches)
+    .where(and(gte(matches.matchDate, brStart), lte(matches.matchDate, brEnd)))
+    .orderBy(asc(matches.matchDate));
 
   return (
     <main className="min-h-screen bg-gray-50 p-8">
@@ -25,6 +47,8 @@ export default async function Home() {
         </header>
 
         <CupInfo />
+
+        <TodayMatches matches={todayMatches} />
 
         <section>
           <h2 className="mb-4 text-xl font-semibold text-gray-800">
