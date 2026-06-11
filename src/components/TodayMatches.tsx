@@ -11,6 +11,33 @@ interface MatchData {
   status: string;
 }
 
+const BROADCAST_CHANNELS = [
+  {
+    name: "CazéTV",
+    icon: "▶️",
+    url: "https://www.youtube.com/@CazsTV",
+    note: "Todos os jogos",
+  },
+  {
+    name: "Globoplay",
+    icon: "🔵",
+    url: "https://globoplay.globo.com",
+    note: "Jogos selecionados",
+  },
+  {
+    name: "SporTV",
+    icon: "📺",
+    url: "https://ge.globo.com/sportv/",
+    note: "TV fechada",
+  },
+  {
+    name: "SBT",
+    icon: "📡",
+    url: "https://www.sbt.com.br",
+    note: "TV aberta",
+  },
+];
+
 export function TodayMatches({ matches }: { matches: MatchData[] }) {
   if (matches.length === 0) return null;
 
@@ -76,6 +103,27 @@ export function TodayMatches({ matches }: { matches: MatchData[] }) {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">
+          📡 Onde assistir no Brasil
+        </h3>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {BROADCAST_CHANNELS.map((channel) => (
+            <a
+              key={channel.name}
+              href={channel.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-col items-center gap-1 rounded-lg border border-gray-100 p-3 text-center transition hover:border-blue-200 hover:bg-blue-50"
+            >
+              <span className="text-xl">{channel.icon}</span>
+              <span className="text-xs font-medium text-gray-800">{channel.name}</span>
+              <span className="text-[10px] text-gray-500">{channel.note}</span>
+            </a>
+          ))}
+        </div>
       </div>
     </div>
   );
