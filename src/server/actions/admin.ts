@@ -8,12 +8,11 @@ import { matches, predictions } from "@/lib/schema";
 import { scoreMatchPredictions } from "@/lib/scoring";
 import { matchResultSchema } from "@/lib/validations";
 
-type AdminResult = 
+type AdminResult =
   | { success: true; scored: number }
   | { success: false; error: string };
 
 export async function registerResult(input: unknown): Promise<AdminResult> {
-  // Auth + admin check
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return { success: false, error: "Não autenticado" };
@@ -22,7 +21,6 @@ export async function registerResult(input: unknown): Promise<AdminResult> {
     return { success: false, error: "Acesso restrito a administradores" };
   }
 
-  // Validate input
   const parsed = matchResultSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: "Placar inválido (valores devem ser entre 0 e 99)" };
@@ -30,16 +28,17 @@ export async function registerResult(input: unknown): Promise<AdminResult> {
 
   const { matchId, homeScore, awayScore } = parsed.data;
 
-  // Check match exists
-  const match = await db.query.matches.findFirst({
-    where: eq(matches.id, matchId),
-  });
+  const matchResults = await db
+    .select()
+    .from(matches)
+    .where(eq(matches.id, matchId))
+    .limit(1);
 
+  const match = matchResults[0];
   if (!match) {
     return { success: false, error: "Jogo não encontrado" };
   }
 
-  // Update match to finished with scores
   await db
     .update(matches)
     .set({
@@ -50,10 +49,10 @@ export async function registerResult(input: unknown): Promise<AdminResult> {
     })
     .where(eq(matches.id, matchId));
 
-  // Score all predictions for this match
-  const matchPredictions = await db.query.predictions.findMany({
-    where: eq(predictions.matchId, matchId),
-  });
+  const matchPredictions = await db
+    .select()
+    .from(predictions)
+    .where(eq(predictions.matchId, matchId));
 
   let scored = 0;
 
@@ -79,4 +78,27 @@ export async function registerResult(input: unknown): Promise<AdminResult> {
   }
 
   return { success: true, scored };
+}
+
+export async function updateBroadcast(
+  matchId: string,
+  channels: string[]
+): Promise<{ success: boolean; error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return { success: false, error: "Não autenticado" };
+  }
+  if (session.user.role !== "admin") {
+    return { success: false, error: "Acesso restrito a administradores" };
+  }
+
+  await db
+    .update(matches)
+    .set({
+      broadcast: JSON.stringify(channels),
+      updatedAt: new Date(),
+    })
+    .where(eq(matches.id, matchId));
+
+  return { success: true };
 }

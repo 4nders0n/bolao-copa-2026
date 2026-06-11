@@ -77,6 +77,7 @@ export const matches = sqliteTable(
     homeScore: integer("home_score"),
     awayScore: integer("away_score"),
     status: text("status").notNull().default("scheduled"), // scheduled, live, finished
+    broadcast: text("broadcast"), // JSON array: ["CazéTV", "Globo", "SporTV", "SBT"]
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
   },

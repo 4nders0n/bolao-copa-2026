@@ -48,11 +48,9 @@ export default async function Home() {
 
         <CupInfo />
 
-        <TodayMatches matches={todayMatches} />
-
-        <section>
+        <section className="mb-8">
           <h2 className="mb-4 text-xl font-semibold text-gray-800">
-            Ranking Geral
+            🏆 Ranking Geral
           </h2>
           {ranking.length === 0 ? (
             <p className="text-gray-500">
@@ -94,6 +92,8 @@ export default async function Home() {
             </div>
           )}
         </section>
+
+        <TodayMatches matches={todayMatches} />
       </div>
     </main>
   );
