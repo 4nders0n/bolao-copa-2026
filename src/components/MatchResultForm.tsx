@@ -97,8 +97,53 @@ export function MatchResultForm({ match }: MatchResultFormProps) {
         {getFlag(match.homeTeam)} {match.homeTeam} vs {match.awayTeam} {getFlag(match.awayTeam)}
       </div>
 
+      {/* Result form */}
+      <form onSubmit={handleSubmitResult} className="flex items-center gap-2 mb-3">
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={homeScore}
+          onChange={(e) => {
+            const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 2);
+            setHomeScore(v);
+          }}
+          disabled={loading}
+          placeholder="-"
+          className="w-14 rounded border px-2 py-1.5 text-center text-lg disabled:bg-gray-100"
+          aria-label={`Placar ${match.homeTeam}`}
+        />
+        <span className="text-lg font-bold text-gray-400">×</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={awayScore}
+          onChange={(e) => {
+            const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 2);
+            setAwayScore(v);
+          }}
+          disabled={loading}
+          placeholder="-"
+          className="w-14 rounded border px-2 py-1.5 text-center text-lg disabled:bg-gray-100"
+          aria-label={`Placar ${match.awayTeam}`}
+        />
+        <button
+          type="submit"
+          disabled={loading || homeScore.length === 0 || awayScore.length === 0}
+          className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
+        >
+          {loading ? "..." : "Resultado"}
+        </button>
+        {message && (
+          <span className={`text-xs ${message.type === "success" ? "text-green-600" : "text-red-600"}`}>
+            {message.text}
+          </span>
+        )}
+      </form>
+
       {/* Broadcast channels */}
-      <div className="mb-3">
+      <div>
         <div className="text-xs font-medium text-gray-600 mb-1">📡 Transmissão:</div>
         <div className="flex flex-wrap gap-1.5">
           {AVAILABLE_CHANNELS.map((channel) => (
@@ -124,45 +169,6 @@ export function MatchResultForm({ match }: MatchResultFormProps) {
           </button>
         </div>
       </div>
-
-      {/* Result form */}
-      <form onSubmit={handleSubmitResult} className="flex items-center gap-2">
-        <input
-          type="number"
-          min="0"
-          max="99"
-          value={homeScore}
-          onChange={(e) => setHomeScore(e.target.value)}
-          disabled={loading}
-          placeholder="-"
-          className="w-14 rounded border px-2 py-1.5 text-center text-lg disabled:bg-gray-100"
-          aria-label={`Placar ${match.homeTeam}`}
-        />
-        <span className="text-lg font-bold text-gray-400">×</span>
-        <input
-          type="number"
-          min="0"
-          max="99"
-          value={awayScore}
-          onChange={(e) => setAwayScore(e.target.value)}
-          disabled={loading}
-          placeholder="-"
-          className="w-14 rounded border px-2 py-1.5 text-center text-lg disabled:bg-gray-100"
-          aria-label={`Placar ${match.awayTeam}`}
-        />
-        <button
-          type="submit"
-        disabled={loading || homeScore.length === 0 || awayScore.length === 0}
-          className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
-        >
-          {loading ? "..." : "Resultado"}
-        </button>
-        {message && (
-          <span className={`text-xs ${message.type === "success" ? "text-green-600" : "text-red-600"}`}>
-            {message.text}
-          </span>
-        )}
-      </form>
     </div>
   );
 }
