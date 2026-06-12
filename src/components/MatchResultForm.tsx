@@ -134,7 +134,7 @@ export function MatchResultForm({ match }: MatchResultFormProps) {
           value={homeScore}
           onChange={(e) => setHomeScore(e.target.value)}
           disabled={loading}
-          placeholder="0"
+          placeholder="-"
           className="w-14 rounded border px-2 py-1.5 text-center text-lg disabled:bg-gray-100"
           aria-label={`Placar ${match.homeTeam}`}
         />
@@ -146,13 +146,13 @@ export function MatchResultForm({ match }: MatchResultFormProps) {
           value={awayScore}
           onChange={(e) => setAwayScore(e.target.value)}
           disabled={loading}
-          placeholder="0"
+          placeholder="-"
           className="w-14 rounded border px-2 py-1.5 text-center text-lg disabled:bg-gray-100"
           aria-label={`Placar ${match.awayTeam}`}
         />
         <button
           type="submit"
-          disabled={loading || homeScore === "" || awayScore === ""}
+        disabled={loading || homeScore.length === 0 || awayScore.length === 0}
           className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
         >
           {loading ? "..." : "Resultado"}
