@@ -140,7 +140,7 @@ export default async function AdminPage() {
           </section>
         )}
 
-        {/* Finished matches */}
+        {/* Finished matches - editable */}
         {finishedMatches.length > 0 && (
           <section className="mb-8">
             <h2 className="mb-4 text-lg font-semibold text-green-700">
@@ -148,22 +148,7 @@ export default async function AdminPage() {
             </h2>
             <div className="grid gap-4">
               {finishedMatches.map((match) => (
-                <div
-                  key={match.id}
-                  className="flex items-center justify-between rounded-lg border bg-white p-4"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                      Grupo {match.group}
-                    </span>
-                    <span className="font-medium">
-                      {getFlag(match.homeTeam)} {match.homeTeam} {match.homeScore} × {match.awayScore} {match.awayTeam} {getFlag(match.awayTeam)}
-                    </span>
-                  </div>
-                  <span className="text-xs text-gray-400">
-                    {match.matchDate.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
-                  </span>
-                </div>
+                <MatchResultForm key={match.id} match={match} />
               ))}
             </div>
           </section>
