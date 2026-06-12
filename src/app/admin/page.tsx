@@ -33,7 +33,7 @@ export default async function AdminPage() {
     );
   }
 
-  // Get today's matches only (Brazil timezone)
+  // Get today's matches + all past matches without results
   const now = new Date();
   const brStart = new Date(now);
   brStart.setUTCHours(3, 0, 0, 0);
@@ -43,15 +43,27 @@ export default async function AdminPage() {
   const brEnd = new Date(brStart);
   brEnd.setUTCDate(brEnd.getUTCDate() + 1);
 
-  const todayMatches = await db
+  const allMatches = await db
     .select()
     .from(matches)
-    .where(and(gte(matches.matchDate, brStart), lte(matches.matchDate, brEnd)))
+    .where(lte(matches.matchDate, brEnd))
     .orderBy(asc(matches.matchDate));
 
-  const scheduled = todayMatches.filter((m) => m.status === "scheduled");
+  // Today's matches
+  const todayMatches = allMatches.filter(
+    (m) => m.matchDate >= brStart && m.matchDate <= brEnd
+  );
+
+  // Past matches without result (need admin action)
+  const pendingResults = allMatches.filter(
+    (m) => m.matchDate < brStart && m.status !== "finished"
+  );
+
+  // Past matches already finished
+  const finishedMatches = allMatches.filter((m) => m.status === "finished");
+
   const live = todayMatches.filter((m) => m.status === "live");
-  const finished = todayMatches.filter((m) => m.status === "finished");
+  const scheduled = todayMatches.filter((m) => m.status === "scheduled");
 
   return (
     <main className="min-h-screen bg-gray-50 p-8">
@@ -67,22 +79,40 @@ export default async function AdminPage() {
           </div>
         </header>
 
-        <div className="mb-6 grid grid-cols-3 gap-4 text-center">
+        <div className="mb-6 grid grid-cols-4 gap-4 text-center">
           <div className="rounded-lg border bg-white p-4">
-            <div className="text-2xl font-bold text-yellow-600">{scheduled.length}</div>
-            <div className="text-sm text-gray-500">Agendados</div>
+            <div className="text-2xl font-bold text-red-600">{pendingResults.length}</div>
+            <div className="text-sm text-gray-500">Pendentes</div>
           </div>
           <div className="rounded-lg border bg-white p-4">
             <div className="text-2xl font-bold text-blue-600">{live.length}</div>
             <div className="text-sm text-gray-500">Ao Vivo</div>
           </div>
           <div className="rounded-lg border bg-white p-4">
-            <div className="text-2xl font-bold text-green-600">{finished.length}</div>
+            <div className="text-2xl font-bold text-yellow-600">{scheduled.length}</div>
+            <div className="text-sm text-gray-500">Hoje</div>
+          </div>
+          <div className="rounded-lg border bg-white p-4">
+            <div className="text-2xl font-bold text-green-600">{finishedMatches.length}</div>
             <div className="text-sm text-gray-500">Finalizados</div>
           </div>
         </div>
 
-        {/* Live matches first */}
+        {/* Pending results - past matches without result registered */}
+        {pendingResults.length > 0 && (
+          <section className="mb-8">
+            <h2 className="mb-4 text-lg font-semibold text-red-700">
+              ⚠️ Resultado Pendente ({pendingResults.length})
+            </h2>
+            <div className="grid gap-4">
+              {pendingResults.map((match) => (
+                <MatchResultForm key={match.id} match={match} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Live matches */}
         {live.length > 0 && (
           <section className="mb-8">
             <h2 className="mb-4 text-lg font-semibold text-blue-700">
@@ -96,26 +126,28 @@ export default async function AdminPage() {
           </section>
         )}
 
-        {/* Scheduled matches - ready to start or register results */}
-        <section className="mb-8">
-          <h2 className="mb-4 text-lg font-semibold text-yellow-700">
-            ⏳ Jogos Agendados ({scheduled.length})
-          </h2>
-          <div className="grid gap-4">
-            {scheduled.map((match) => (
-              <MatchResultForm key={match.id} match={match} />
-            ))}
-          </div>
-        </section>
-
-        {/* Finished matches */}
-        {finished.length > 0 && (
+        {/* Today's scheduled matches */}
+        {scheduled.length > 0 && (
           <section className="mb-8">
-            <h2 className="mb-4 text-lg font-semibold text-green-700">
-              ✅ Jogos Finalizados ({finished.length})
+            <h2 className="mb-4 text-lg font-semibold text-yellow-700">
+              ⏳ Jogos de Hoje — Agendados ({scheduled.length})
             </h2>
             <div className="grid gap-4">
-              {finished.map((match) => (
+              {scheduled.map((match) => (
+                <MatchResultForm key={match.id} match={match} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Finished matches */}
+        {finishedMatches.length > 0 && (
+          <section className="mb-8">
+            <h2 className="mb-4 text-lg font-semibold text-green-700">
+              ✅ Jogos Finalizados ({finishedMatches.length})
+            </h2>
+            <div className="grid gap-4">
+              {finishedMatches.map((match) => (
                 <div
                   key={match.id}
                   className="flex items-center justify-between rounded-lg border bg-white p-4"
