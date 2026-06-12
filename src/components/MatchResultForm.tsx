@@ -67,7 +67,7 @@ export function MatchResultForm({ match }: MatchResultFormProps) {
 
   const matchDate = new Date(match.matchDate);
   const isPast = new Date() > matchDate;
-  const canRegisterResult = isPast && match.status !== "finished";
+  const canRegisterResult = isPast;
 
   return (
     <div className="rounded-lg border bg-white p-4">
@@ -135,7 +135,7 @@ export function MatchResultForm({ match }: MatchResultFormProps) {
             disabled={loading || homeScore.length === 0 || awayScore.length === 0}
             className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
           >
-            {loading ? "..." : "Resultado"}
+            {loading ? "..." : match.status === "finished" ? "Corrigir" : "Resultado"}
           </button>
           {message && (
             <span className={`text-xs ${message.type === "success" ? "text-green-600" : "text-red-600"}`}>
@@ -143,10 +143,6 @@ export function MatchResultForm({ match }: MatchResultFormProps) {
             </span>
           )}
         </form>
-      ) : match.status === "finished" ? (
-        <div className="mb-3 text-sm font-semibold text-green-700">
-          ✅ {match.homeScore} × {match.awayScore} — Resultado registrado
-        </div>
       ) : (
         <div className="mb-3 text-xs text-gray-400">
           ⏳ Aguardando início do jogo para registrar resultado

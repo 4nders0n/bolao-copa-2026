@@ -1,12 +1,14 @@
 import { db } from "@/lib/db";
 import { matches } from "@/lib/schema";
-import { asc } from "drizzle-orm";
+import { asc, and, gte, lte } from "drizzle-orm";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { getFlag } from "@/lib/flags";
 import Link from "next/link";
 import { MatchResultForm } from "@/components/MatchResultForm";
+
+export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const session = await getServerSession(authOptions);
@@ -31,14 +33,25 @@ export default async function AdminPage() {
     );
   }
 
-  const allMatches = await db
+  // Get today's matches only (Brazil timezone)
+  const now = new Date();
+  const brStart = new Date(now);
+  brStart.setUTCHours(3, 0, 0, 0);
+  if (now.getUTCHours() < 3) {
+    brStart.setUTCDate(brStart.getUTCDate() - 1);
+  }
+  const brEnd = new Date(brStart);
+  brEnd.setUTCDate(brEnd.getUTCDate() + 1);
+
+  const todayMatches = await db
     .select()
     .from(matches)
+    .where(and(gte(matches.matchDate, brStart), lte(matches.matchDate, brEnd)))
     .orderBy(asc(matches.matchDate));
 
-  const scheduled = allMatches.filter((m) => m.status === "scheduled");
-  const live = allMatches.filter((m) => m.status === "live");
-  const finished = allMatches.filter((m) => m.status === "finished");
+  const scheduled = todayMatches.filter((m) => m.status === "scheduled");
+  const live = todayMatches.filter((m) => m.status === "live");
+  const finished = todayMatches.filter((m) => m.status === "finished");
 
   return (
     <main className="min-h-screen bg-gray-50 p-8">
@@ -49,7 +62,7 @@ export default async function AdminPage() {
               ← Início
             </Link>
             <h1 className="text-3xl font-bold text-gray-900">
-              🔧 Admin - Resultados
+              🔧 Admin - Jogos de Hoje
             </h1>
           </div>
         </header>
