@@ -42,6 +42,12 @@ export default async function Home() {
             >
               Ver Jogos
             </Link>
+            <Link
+              href="/palpites"
+              className="rounded-lg border border-blue-600 px-4 py-2 text-sm font-medium text-blue-600 transition hover:bg-blue-50"
+            >
+              Palpites
+            </Link>
             <AuthButton />
           </div>
         </header>
