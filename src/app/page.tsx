@@ -2,12 +2,14 @@ import { getRanking } from "@/server/queries/ranking";
 import { AuthButton } from "@/components/AuthButton";
 import { CupInfo } from "@/components/CupInfo";
 import { TodayMatches } from "@/components/TodayMatches";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { db } from "@/lib/db";
 import { matches } from "@/lib/schema";
 import { gte, lte, and, asc } from "drizzle-orm";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function Home() {
   const ranking = await getRanking();
@@ -53,6 +55,8 @@ export default async function Home() {
         </header>
 
         <CupInfo />
+
+        <AutoRefresh intervalSeconds={30} />
 
         <section className="mb-8">
           <h2 className="mb-4 text-xl font-semibold text-gray-800">
