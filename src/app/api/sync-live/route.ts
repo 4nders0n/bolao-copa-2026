@@ -58,9 +58,29 @@ export async function GET(request: Request) {
       return true;
     });
 
+    // Team name mapping: API-Football names → our DB names
+    const TEAM_NAME_MAP: Record<string, string> = {
+      "Congo DR": "DR Congo",
+      "Korea Republic": "South Korea",
+      "Turkiye": "Turkey",
+      "Türkiye": "Turkey",
+      "Bosnia And Herzegovina": "Bosnia & Herzegovina",
+      "Cote D'Ivoire": "Ivory Coast",
+      "Ivory Coast": "Ivory Coast",
+      "Curacao": "Curacao",
+      "Cape Verde": "Cape Verde",
+      "New Zealand": "New Zealand",
+      "Saudi Arabia": "Saudi Arabia",
+      "Czech Republic": "Czech Republic",
+      "Czechia": "Czech Republic",
+      "South Africa": "South Africa",
+    };
+
     for (const fixture of uniqueFixtures) {
-      const homeTeam = fixture.teams.home.name;
-      const awayTeam = fixture.teams.away.name;
+      const rawHome = fixture.teams.home.name;
+      const rawAway = fixture.teams.away.name;
+      const homeTeam = TEAM_NAME_MAP[rawHome] ?? rawHome;
+      const awayTeam = TEAM_NAME_MAP[rawAway] ?? rawAway;
       const homeScore = fixture.goals.home;
       const awayScore = fixture.goals.away;
       const apiStatus = fixture.fixture.status.short;
