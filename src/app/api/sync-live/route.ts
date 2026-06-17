@@ -143,6 +143,13 @@ export async function GET(request: Request) {
       liveMatches: liveData.results || 0,
       lastMatches: lastData.results || 0,
       timestamp: new Date().toISOString(),
+      // Debug: show API team names for unmatched fixtures
+      apiFixtures: uniqueFixtures.map((f: any) => ({
+        home: f.teams.home.name,
+        away: f.teams.away.name,
+        score: `${f.goals.home}-${f.goals.away}`,
+        status: f.fixture.status.short,
+      })),
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
