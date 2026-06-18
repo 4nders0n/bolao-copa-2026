@@ -9,15 +9,31 @@ export const dynamic = "force-dynamic";
 const API_BASE = "https://v3.football.api-sports.io";
 const WORLD_CUP_LEAGUE_ID = 1;
 
+// Team name mapping: API-Football names → our DB names
+const TEAM_NAME_MAP: Record<string, string> = {
+  "Congo DR": "DR Congo",
+  "Korea Republic": "South Korea",
+  "Turkiye": "Turkey",
+  "Türkiye": "Turkey",
+  "Bosnia And Herzegovina": "Bosnia & Herzegovina",
+  "Cote D'Ivoire": "Ivory Coast",
+  "Curacao": "Curacao",
+  "Czechia": "Czech Republic",
+};
+
+function mapTeamName(apiName: string): string {
+  return TEAM_NAME_MAP[apiName] ?? apiName;
+}
+
 /**
  * Sync live World Cup fixtures from API-Football.
- * 
- * This endpoint uses /fixtures?league=1&live=all which works on the free plan.
- * Call it periodically during matches to get live scores.
- * 
- * Also checks recently finished matches using /fixtures?league=1&last=5
- * 
- * Usage: GET /api/sync-live?token=your-sync-secret
+ *
+ * Strategy:
+ * 1. Fetch live matches → update scores in DB as "live"
+ * 2. Check DB for matches that were "live" but are NOT in the live feed anymore
+ *    → they just finished. Mark as "finished" and score predictions.
+ *
+ * This avoids needing the ?date= or ?last= endpoints (blocked on free plan).
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -36,64 +52,26 @@ export async function GET(request: Request) {
   try {
     let updated = 0;
     let scored = 0;
+    let finalized = 0;
 
-    // Fetch live World Cup matches
+    // Step 1: Fetch live World Cup matches
     const liveRes = await fetch(`${API_BASE}/fixtures?league=${WORLD_CUP_LEAGUE_ID}&live=all`, {
       headers: { "x-apisports-key": apiKey },
     });
     const liveData = await liveRes.json();
+    const liveFixtures = liveData.response || [];
 
-    // Fetch today's fixtures (catches recently finished games)
-    const today = new Date().toISOString().split("T")[0]; // "2026-06-17"
-    const todayRes = await fetch(`${API_BASE}/fixtures?league=${WORLD_CUP_LEAGUE_ID}&date=${today}`, {
-      headers: { "x-apisports-key": apiKey },
-    });
-    const todayData = await todayRes.json();
+    // Track which matches from our DB are currently live in the API
+    const liveMatchIds = new Set<string>();
 
-    // Combine both results, deduplicate by fixture id
-    const allFixtures = [...(liveData.response || []), ...(todayData.response || [])];
-    const seen = new Set<number>();
-    const uniqueFixtures = allFixtures.filter((f: any) => {
-      if (seen.has(f.fixture.id)) return false;
-      seen.add(f.fixture.id);
-      return true;
-    });
-
-    // Team name mapping: API-Football names → our DB names
-    const TEAM_NAME_MAP: Record<string, string> = {
-      "Congo DR": "DR Congo",
-      "Korea Republic": "South Korea",
-      "Turkiye": "Turkey",
-      "Türkiye": "Turkey",
-      "Bosnia And Herzegovina": "Bosnia & Herzegovina",
-      "Cote D'Ivoire": "Ivory Coast",
-      "Ivory Coast": "Ivory Coast",
-      "Curacao": "Curacao",
-      "Cape Verde": "Cape Verde",
-      "New Zealand": "New Zealand",
-      "Saudi Arabia": "Saudi Arabia",
-      "Czech Republic": "Czech Republic",
-      "Czechia": "Czech Republic",
-      "South Africa": "South Africa",
-    };
-
-    for (const fixture of uniqueFixtures) {
-      const rawHome = fixture.teams.home.name;
-      const rawAway = fixture.teams.away.name;
-      const homeTeam = TEAM_NAME_MAP[rawHome] ?? rawHome;
-      const awayTeam = TEAM_NAME_MAP[rawAway] ?? rawAway;
+    // Update live matches in DB
+    for (const fixture of liveFixtures) {
+      const homeTeam = mapTeamName(fixture.teams.home.name);
+      const awayTeam = mapTeamName(fixture.teams.away.name);
       const homeScore = fixture.goals.home;
       const awayScore = fixture.goals.away;
-      const apiStatus = fixture.fixture.status.short;
 
-      // Map API status
-      const finishedStatuses = ["FT", "AET", "PEN"];
-      const liveStatuses = ["1H", "2H", "HT", "ET", "BT", "P", "LIVE"];
-      let status: "scheduled" | "live" | "finished" = "scheduled";
-      if (finishedStatuses.includes(apiStatus)) status = "finished";
-      else if (liveStatuses.includes(apiStatus)) status = "live";
-
-      // Find matching match in our DB by team names
+      // Find in DB
       const dbMatches = await db
         .select()
         .from(matches)
@@ -103,32 +81,50 @@ export async function GET(request: Request) {
       const dbMatch = dbMatches[0];
       if (!dbMatch) continue;
 
-      // Check if update needed
+      liveMatchIds.add(dbMatch.id);
+
+      // Update score and status to "live"
       const needsUpdate =
-        dbMatch.status !== status ||
+        dbMatch.status !== "live" ||
         dbMatch.homeScore !== homeScore ||
         dbMatch.awayScore !== awayScore;
 
-      if (!needsUpdate) continue;
+      if (needsUpdate) {
+        await db
+          .update(matches)
+          .set({
+            homeScore,
+            awayScore,
+            status: "live",
+            updatedAt: new Date(),
+          })
+          .where(eq(matches.id, dbMatch.id));
+        updated++;
+      }
+    }
 
-      const wasNotFinished = dbMatch.status !== "finished";
-      const isNowFinished = status === "finished";
+    // Step 2: Find matches in DB that are "live" but NOT in the API live feed
+    // → these just finished
+    const dbLiveMatches = await db
+      .select()
+      .from(matches)
+      .where(eq(matches.status, "live"));
 
-      // Update match
-      await db
-        .update(matches)
-        .set({
-          homeScore,
-          awayScore,
-          status,
-          updatedAt: new Date(),
-        })
-        .where(eq(matches.id, dbMatch.id));
+    for (const dbMatch of dbLiveMatches) {
+      if (liveMatchIds.has(dbMatch.id)) continue; // still live, skip
 
-      updated++;
+      // This match was "live" in our DB but is no longer in the API feed → it finished
+      // Use the last known score (already saved from previous sync calls)
+      if (dbMatch.homeScore !== null && dbMatch.awayScore !== null) {
+        // Mark as finished
+        await db
+          .update(matches)
+          .set({ status: "finished", updatedAt: new Date() })
+          .where(eq(matches.id, dbMatch.id));
 
-      // If just finished, score predictions
-      if (wasNotFinished && isNowFinished && homeScore !== null && awayScore !== null) {
+        finalized++;
+
+        // Score predictions
         const matchPredictions = await db
           .select()
           .from(predictions)
@@ -141,8 +137,8 @@ export async function GET(request: Request) {
               homeScore: p.homeScore,
               awayScore: p.awayScore,
             })),
-            homeScore,
-            awayScore
+            dbMatch.homeScore,
+            dbMatch.awayScore
           );
 
           for (const sp of scoredPredictions) {
@@ -160,17 +156,10 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       updated,
+      finalized,
       scored,
-      liveMatches: liveData.results || 0,
-      todayMatches: todayData.results || 0,
-      todayErrors: todayData.errors || null,
+      liveMatches: liveFixtures.length,
       timestamp: new Date().toISOString(),
-      apiFixtures: uniqueFixtures.map((f: any) => ({
-        home: f.teams.home.name,
-        away: f.teams.away.name,
-        score: `${f.goals.home}-${f.goals.away}`,
-        status: f.fixture.status.short,
-      })),
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
