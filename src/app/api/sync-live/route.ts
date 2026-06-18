@@ -43,14 +43,15 @@ export async function GET(request: Request) {
     });
     const liveData = await liveRes.json();
 
-    // Also fetch last 5 finished matches (catches recently ended games)
-    const lastRes = await fetch(`${API_BASE}/fixtures?league=${WORLD_CUP_LEAGUE_ID}&last=5`, {
+    // Fetch today's fixtures (catches recently finished games)
+    const today = new Date().toISOString().split("T")[0]; // "2026-06-17"
+    const todayRes = await fetch(`${API_BASE}/fixtures?league=${WORLD_CUP_LEAGUE_ID}&date=${today}`, {
       headers: { "x-apisports-key": apiKey },
     });
-    const lastData = await lastRes.json();
+    const todayData = await todayRes.json();
 
     // Combine both results, deduplicate by fixture id
-    const allFixtures = [...(liveData.response || []), ...(lastData.response || [])];
+    const allFixtures = [...(liveData.response || []), ...(todayData.response || [])];
     const seen = new Set<number>();
     const uniqueFixtures = allFixtures.filter((f: any) => {
       if (seen.has(f.fixture.id)) return false;
@@ -161,15 +162,8 @@ export async function GET(request: Request) {
       updated,
       scored,
       liveMatches: liveData.results || 0,
-      lastMatches: lastData.results || 0,
+      todayMatches: todayData.results || 0,
       timestamp: new Date().toISOString(),
-      // Debug: show API team names for unmatched fixtures
-      apiFixtures: uniqueFixtures.map((f: any) => ({
-        home: f.teams.home.name,
-        away: f.teams.away.name,
-        score: `${f.goals.home}-${f.goals.away}`,
-        status: f.fixture.status.short,
-      })),
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
