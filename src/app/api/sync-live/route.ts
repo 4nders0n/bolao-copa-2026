@@ -163,7 +163,14 @@ export async function GET(request: Request) {
       scored,
       liveMatches: liveData.results || 0,
       todayMatches: todayData.results || 0,
+      todayErrors: todayData.errors || null,
       timestamp: new Date().toISOString(),
+      apiFixtures: uniqueFixtures.map((f: any) => ({
+        home: f.teams.home.name,
+        away: f.teams.away.name,
+        score: `${f.goals.home}-${f.goals.away}`,
+        status: f.fixture.status.short,
+      })),
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
