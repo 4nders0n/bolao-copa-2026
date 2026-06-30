@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { getFlag } from "@/lib/flags";
 import Link from "next/link";
 import { MatchResultForm } from "@/components/MatchResultForm";
+import { FetchResultsButton } from "@/components/FetchResultsButton";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +79,8 @@ export default async function AdminPage() {
             </h1>
           </div>
         </header>
+
+        <FetchResultsButton />
 
         <div className="mb-6 grid grid-cols-4 gap-4 text-center">
           <div className="rounded-lg border bg-white p-4">
