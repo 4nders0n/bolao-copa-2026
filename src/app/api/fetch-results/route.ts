@@ -1,52 +1,61 @@
 import { NextResponse } from "next/server";
-import { eq, and, not } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { matches, predictions } from "@/lib/schema";
 import { scoreMatchPredictions } from "@/lib/scoring";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { randomId } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
-
-/**
- * Fetch missing results from ESPN's public scoreboard API and update our database.
- * Only accessible by admin users.
- * 
- * Usage: POST /api/fetch-results
- */
 
 // Team name mapping: ESPN names → our DB names
 const TEAM_NAME_MAP: Record<string, string> = {
   "Congo DR": "DR Congo",
+  "DR Congo": "DR Congo",
   "Korea Republic": "South Korea",
   "Turkiye": "Turkey",
   "Türkiye": "Turkey",
   "Bosnia And Herzegovina": "Bosnia & Herzegovina",
   "Bosnia-Herzegovina": "Bosnia & Herzegovina",
   "Bosnia Herzegovina": "Bosnia & Herzegovina",
+  "Bosnia and Herzegovina": "Bosnia & Herzegovina",
   "Cote D'Ivoire": "Ivory Coast",
   "Côte d'Ivoire": "Ivory Coast",
   "Czechia": "Czech Republic",
   "Korea, Republic Of": "South Korea",
   "Cabo Verde": "Cape Verde",
   "IR Iran": "Iran",
+  "Curaçao": "Curacao",
 };
 
 function mapTeamName(name: string): string {
   return TEAM_NAME_MAP[name] ?? name;
 }
 
-function calculatePoints(predHome: number, predAway: number, actualHome: number, actualAway: number): number {
-  if (predHome === actualHome && predAway === actualAway) return 10;
-  const predDiff = predHome - predAway;
-  const actualDiff = actualHome - actualAway;
-  if (Math.sign(predDiff) !== Math.sign(actualDiff)) return 0;
-  if (predDiff === actualDiff) return 7;
-  return 5;
+// Map ESPN round names to our phase names
+function mapPhase(espnRound: string): string {
+  if (!espnRound) return "group_stage";
+  const lower = espnRound.toLowerCase();
+  if (lower.includes("group")) return "group_stage";
+  if (lower.includes("round of 32") || lower.includes("last 32")) return "round_of_32";
+  if (lower.includes("round of 16") || lower.includes("last 16")) return "round_of_16";
+  if (lower.includes("quarter")) return "quarter_finals";
+  if (lower.includes("semi")) return "semi_finals";
+  if (lower.includes("third") || lower.includes("3rd")) return "third_place";
+  if (lower.includes("final") && !lower.includes("semi") && !lower.includes("quarter")) return "final";
+  return "round_of_32";
 }
 
+/**
+ * Fetch World Cup fixtures from ESPN's public API.
+ * - Creates new matches that don't exist in our DB
+ * - Updates results for finished matches
+ * - Scores predictions automatically
+ * 
+ * Only accessible by admin users.
+ */
 export async function POST(request: Request) {
-  // Admin check
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
@@ -56,9 +65,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    // Fetch World Cup scores from ESPN's public API
-    // ESPN scoreboard endpoint for FIFA World Cup (league=fifa.world)
-    const dates = getRecentDates(7); // last 7 days
+    // Fetch from ESPN - last 14 days + next 7 days
+    const dates = getDates(-14, 7);
     let allEvents: any[] = [];
 
     for (const date of dates) {
@@ -72,14 +80,21 @@ export async function POST(request: Request) {
       }
     }
 
+    // Deduplicate by event ID
+    const seen = new Set<string>();
+    allEvents = allEvents.filter((e) => {
+      if (seen.has(e.id)) return false;
+      seen.add(e.id);
+      return true;
+    });
+
+    let inserted = 0;
     let updated = 0;
     let scored = 0;
     const errors: string[] = [];
+    const defaultBroadcast = JSON.stringify(["CazéTV", "Globo", "SBT", "SporTV"]);
 
     for (const event of allEvents) {
-      // Only process finished games
-      if (event.status?.type?.state !== "post") continue;
-
       const competitors = event.competitions?.[0]?.competitors;
       if (!competitors || competitors.length !== 2) continue;
 
@@ -89,60 +104,80 @@ export async function POST(request: Request) {
 
       const homeTeam = mapTeamName(home.team.displayName || home.team.name);
       const awayTeam = mapTeamName(away.team.displayName || away.team.name);
+      const matchDate = new Date(event.date);
+      const isFinished = event.status?.type?.state === "post";
+      const isLive = event.status?.type?.state === "in";
       const homeScore = parseInt(home.score, 10);
       const awayScore = parseInt(away.score, 10);
+      const round = event.competitions?.[0]?.round?.displayName || event.season?.slug || "";
+      const phase = mapPhase(round);
 
-      if (isNaN(homeScore) || isNaN(awayScore)) continue;
+      // Try to find match in DB
+      let dbMatch = await findMatch(homeTeam, awayTeam);
 
-      // Find in our DB
-      const dbMatches = await db
-        .select()
-        .from(matches)
-        .where(and(eq(matches.homeTeam, homeTeam), eq(matches.awayTeam, awayTeam)))
-        .limit(1);
-
-      const dbMatch = dbMatches[0];
       if (!dbMatch) {
-        // Try reversed (ESPN might have home/away swapped)
-        const dbMatchesReversed = await db
-          .select()
-          .from(matches)
-          .where(and(eq(matches.homeTeam, awayTeam), eq(matches.awayTeam, homeTeam)))
-          .limit(1);
+        // Try reversed
+        dbMatch = await findMatch(awayTeam, homeTeam);
+        if (dbMatch) {
+          // Found reversed - skip this one, ESPN has it flipped
+          // Update with swapped scores if finished
+          if (isFinished && !isNaN(homeScore) && !isNaN(awayScore)) {
+            if (dbMatch.status !== "finished" || dbMatch.homeScore !== awayScore || dbMatch.awayScore !== homeScore) {
+              await db.update(matches).set({
+                homeScore: awayScore, awayScore: homeScore, status: "finished", updatedAt: new Date()
+              }).where(eq(matches.id, dbMatch.id));
+              updated++;
+              scored += await scorePredictions(dbMatch.id, awayScore, homeScore);
+            }
+          }
+          continue;
+        }
 
-        if (dbMatchesReversed[0]) {
-          // Found reversed - update with swapped scores
-          const match = dbMatchesReversed[0];
-          if (match.status === "finished" && match.homeScore === awayScore && match.awayScore === homeScore) continue;
+        // Match doesn't exist - insert it
+        const newId = randomId();
+        await db.insert(matches).values({
+          id: newId,
+          homeTeam,
+          awayTeam,
+          matchDate,
+          phase,
+          group: null,
+          homeScore: isFinished && !isNaN(homeScore) ? homeScore : null,
+          awayScore: isFinished && !isNaN(awayScore) ? awayScore : null,
+          status: isFinished ? "finished" : isLive ? "live" : "scheduled",
+          broadcast: defaultBroadcast,
+        });
+        inserted++;
 
-          await db
-            .update(matches)
-            .set({ homeScore: awayScore, awayScore: homeScore, status: "finished", updatedAt: new Date() })
-            .where(eq(matches.id, match.id));
-
-          updated++;
-          scored += await scorePredictions(match.id, awayScore, homeScore);
-        } else {
-          errors.push(`Not found: ${homeTeam} vs ${awayTeam}`);
+        // Score if already finished
+        if (isFinished && !isNaN(homeScore) && !isNaN(awayScore)) {
+          scored += await scorePredictions(newId, homeScore, awayScore);
         }
         continue;
       }
 
-      // Skip if already finished with same score
-      if (dbMatch.status === "finished" && dbMatch.homeScore === homeScore && dbMatch.awayScore === awayScore) continue;
-
-      // Update match
-      await db
-        .update(matches)
-        .set({ homeScore, awayScore, status: "finished", updatedAt: new Date() })
-        .where(eq(matches.id, dbMatch.id));
-
-      updated++;
-      scored += await scorePredictions(dbMatch.id, homeScore, awayScore);
+      // Match exists - update if needed
+      if (isFinished && !isNaN(homeScore) && !isNaN(awayScore)) {
+        if (dbMatch.status !== "finished" || dbMatch.homeScore !== homeScore || dbMatch.awayScore !== awayScore) {
+          await db.update(matches).set({
+            homeScore, awayScore, status: "finished", updatedAt: new Date()
+          }).where(eq(matches.id, dbMatch.id));
+          updated++;
+          scored += await scorePredictions(dbMatch.id, homeScore, awayScore);
+        }
+      } else if (isLive && !isNaN(homeScore) && !isNaN(awayScore)) {
+        if (dbMatch.homeScore !== homeScore || dbMatch.awayScore !== awayScore || dbMatch.status !== "live") {
+          await db.update(matches).set({
+            homeScore, awayScore, status: "live", updatedAt: new Date()
+          }).where(eq(matches.id, dbMatch.id));
+          updated++;
+        }
+      }
     }
 
     return NextResponse.json({
       success: true,
+      inserted,
       updated,
       scored,
       eventsFound: allEvents.length,
@@ -152,6 +187,15 @@ export async function POST(request: Request) {
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
+}
+
+async function findMatch(homeTeam: string, awayTeam: string) {
+  const results = await db
+    .select()
+    .from(matches)
+    .where(and(eq(matches.homeTeam, homeTeam), eq(matches.awayTeam, awayTeam)))
+    .limit(1);
+  return results[0] ?? null;
 }
 
 async function scorePredictions(matchId: string, homeScore: number, awayScore: number): Promise<number> {
@@ -178,11 +222,11 @@ async function scorePredictions(matchId: string, homeScore: number, awayScore: n
   return scoredPredictions.length;
 }
 
-function getRecentDates(days: number): string[] {
+function getDates(daysBack: number, daysForward: number): string[] {
   const dates: string[] = [];
-  for (let i = 0; i < days; i++) {
+  for (let i = daysBack; i <= daysForward; i++) {
     const d = new Date();
-    d.setDate(d.getDate() - i);
+    d.setDate(d.getDate() + i);
     dates.push(d.toISOString().split("T")[0].replace(/-/g, ""));
   }
   return dates;
